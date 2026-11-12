@@ -1,0 +1,25 @@
+<!doctype html><html lang="zh-CN"><meta charset="utf-8"><title>隔离存档事务回归</title><h1>隔离存档事务回归</h1><p>只使用随机测试数据库，不读写游戏的真实存档。</p><button id="run">运行隔离测试</button><pre id="results" role="status">尚未运行</pre><script type="module">
+import {createStore} from '../storage.js';
+import {fresh} from '../engine.js';
+const out=document.querySelector('#results');
+document.querySelector('#run').onclick=async()=>{
+ document.querySelector('#run').disabled=true;out.textContent='运行中';let lines=[],stores=[],dbs=[];
+ const assert=(ok,msg)=>{if(!ok)throw Error(msg);};
+ const test=async(name,fn)=>{await fn();lines.push('PASS '+name);out.textContent=lines.join('\n');};
+ const legacy={version:1,solved:{umbrella:'keep'},ending:null};
+ const newPair=async(seed=fresh())=>{const database='quest-qa-'+crypto.randomUUID();dbs.push(database);const options={database,legacyStorage:{getItem:()=>JSON.stringify(seed)},channelFactory:()=>null};const a=createStore(options),b=createStore(options);stores.push(a,b);const [x,y]=await Promise.all([a.init(),b.init()]);assert(a.persistent&&b.persistent,'requires real IndexedDB');return {a,b,x,y};};
+ const solve=id=>({type:'solve',id,choice:'keep'});
+ try{
+ await test('两个客户端同时初始化及并发不同委托不会覆盖',async()=>{const {a,b,x,y}=await newPair();assert(x.generation===y.generation,'init generations differ');await Promise.all([a.apply(solve('umbrella'),x),b.apply(solve('lift'),y)]);const n=await a.read();assert(Object.keys(n.data.solved).length===2,'lost progress');});
+ await test('同一委托同时选择只有一个提交，冲突可见',async()=>{const {a,b,x,y}=await newPair();const r=await Promise.all([a.apply(solve('moon'),x),b.apply({...solve('moon'),choice:'return'},y)]);assert(r.filter(v=>v.reason==='already').length===1,'missing conflict');assert((await a.read()).revision===1,'double commit');});
+ await test('确认重置后旧页面不能复活旧存档',async()=>{const {a,b,x,y}=await newPair(legacy);await a.apply({type:'reset'},x);const r=await b.apply(solve('moon'),y);assert(r.reason==='reset','old write accepted');assert(Object.keys((await a.read()).data.solved).length===0,'resurrected save');});
+ await test('重置与归档真正并发按事务顺序处理',async()=>{const {a,b,x,y}=await newPair(legacy);await Promise.all([a.apply({type:'reset'},x),b.apply(solve('moon'),y)]);const r=await a.read();assert(r.generation!==x.generation?Object.keys(r.data.solved).length===0:r.data.solved.moon==='keep','race lost data');});
+ await test('过期重置确认不清除其他页的新进度',async()=>{const {a,b,x,y}=await newPair();await b.apply(solve('moon'),y);assert((await a.apply({type:'reset'},x)).reason==='conflict','stale reset accepted');});
+ await test('旧存档导入一次，旧版本随后写入不会污染新档',async()=>{const {a,b,x}=await newPair(legacy);assert(x.data.solved.umbrella==='keep','legacy missing');await a.apply({type:'reset'},x);assert(Object.keys((await b.read()).data.solved).length===0,'legacy reimported');});
+ await test('刷新式重连恢复最新已提交记录',async()=>{const {a,x}=await newPair();await a.apply(solve('lift'),x);const c=createStore({database:dbs.at(-1),channelFactory:()=>null});stores.push(c);assert((await c.init()).data.solved.lift==='keep','reload lost save');});
+ await test('无 IndexedDB 时不写共享旧存档',async()=>{let writes=0;const s=createStore({indexedDB:null,legacyStorage:{getItem:()=>JSON.stringify(legacy),setItem:()=>writes++}});stores.push(s);const x=await s.init();await s.apply(solve('moon'),x);assert(!s.persistent&&writes===0,'unsafe fallback');});
+ lines.push('ALL PASS (8 browser transaction tests)');
+ }catch(e){lines.push('FAIL '+e.message);}
+ finally{stores.forEach(s=>s.close());await Promise.all(dbs.map(name=>new Promise(resolve=>{const r=indexedDB.deleteDatabase(name);r.onsuccess=r.onerror=r.onblocked=resolve;})));out.textContent=lines.join('\n');document.querySelector('#run').disabled=false;}
+};
+</script></html>

@@ -1,0 +1,14 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {initialRecord,transition,createStore} from '../storage.js';
+import {fresh} from '../engine.js';
+const start=()=>initialRecord(fresh(),'run-1');
+const choice=(id,choice='keep')=>({type:'solve',id,choice});
+test('stale independent quest merges against current record',()=>{const a=start();const one=transition(a,a,choice('umbrella'));const two=transition(one.record,a,choice('lift'));assert.equal(Object.keys(two.record.data.solved).length,2);assert.equal(two.record.revision,2);});
+test('same quest first commit wins',()=>{const a=start(),b=transition(a,a,choice('umbrella')).record;const c=transition(b,a,choice('umbrella','return'));assert.equal(c.reason,'already');assert.equal(c.record.data.solved.umbrella,'keep');});
+test('reset fences old-page quest and ending writes',()=>{const a=start(),r=transition(a,a,{type:'reset'},'run-2').record;assert.equal(transition(r,a,choice('moon')).reason,'reset');assert.equal(transition(r,a,{type:'finish',ending:'sea',code:'留一天'}).reason,'reset');assert.deepEqual(r.data,fresh());});
+test('reset confirmation from before another write cannot erase unseen progress',()=>{const a=start(),b=transition(a,a,choice('moon')).record;assert.equal(transition(b,a,{type:'reset'},'run-2').reason,'conflict');});
+test('old valid save copies without mutation, endings retained',()=>{const old={version:1,solved:{umbrella:'keep',lift:'return',moon:'keep'},ending:'window'};const r=initialRecord(old,'r');assert.deepEqual(r.data,old);r.data.solved.moon='return';assert.equal(old.solved.moon,'keep');});
+test('invalid actions and invalid endings do not bump revision',()=>{const a=start();assert.equal(transition(a,a,choice('invalid')).changed,false);assert.equal(transition(a,a,{type:'finish',ending:'sea',code:'留一天'}).changed,false);});
+test('stale ending does not replace another ending',()=>{const a=initialRecord({version:1,solved:{umbrella:'keep',lift:'return',moon:'keep'},ending:null},'r');const b=transition(a,a,{type:'finish',ending:'garden',code:'留一天'}).record;assert.equal(transition(b,a,{type:'finish',ending:'sea',code:'留一天'}).reason,'conflict');});
+test('unsupported storage is session-only and never writes legacy',async()=>{let writes=0;const old={getItem:()=>JSON.stringify(fresh()),setItem:()=>writes++};const s=createStore({indexedDB:null,legacyStorage:old,makeGeneration:()=> 'x'});const a=await s.init();assert.equal(s.persistent,false);assert.equal((await s.apply(choice('moon'),a)).data.solved.moon,'keep');assert.equal(writes,0);s.close();});

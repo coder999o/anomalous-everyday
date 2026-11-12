@@ -1,10 +1,34 @@
-import {KEY,jobs,endings,fresh,normalize,completed,balanced,solve,finish,correctCode} from './engine.js';
+import {jobs,endings,fresh,completed,balanced,correctCode} from './engine.js';
+import {createStore} from './storage.js';
 const main=document.querySelector('#main');
-let state=fresh(),storageOK=true;
-try{state=normalize(JSON.parse(localStorage.getItem(KEY)));}catch{storageOK=false;}
-let unlocked=false;
-function save(){try{localStorage.setItem(KEY,JSON.stringify(state));storageOK=true;}catch{storageOK=false;}updateStatus();}
-function updateStatus(){document.querySelector('#save-status').textContent=storageOK?'进度仅保存在此浏览器。':'浏览器未允许存档，本次进度仍可继续，关闭页面后可能丢失。';}
+let state=fresh(), snapshot, busy=false, unlocked=false, notice='';
+let legacyStorage;
+try{legacyStorage=window.localStorage;}catch{}
+const store=createStore({legacyStorage,onChange:()=>{updateStatus();void sync();}});
+function updateStatus(){document.querySelector('#save-status').textContent=notice || (store.reloadRequired?'存档连接已更新，请刷新页面后继续。':store.persistent?'进度仅保存在此浏览器，多标签页会自动同步。':'无法可靠存档：当前页可临时游玩，关闭或刷新后本次进度会丢失；其他标签页不会同步。');}
+function accept(next){snapshot=next;state=next.data;}
+async function sync(){
+ if(busy || !snapshot)return;
+ const before=snapshot;
+ try{const next=await store.read();
+  if(busy || before!==snapshot)return;
+  if(next.revision!==snapshot.revision || next.generation!==snapshot.generation){
+   accept(next);unlocked=false;
+   document.querySelector('#reset-dialog').close();
+   notice='另一页面更新了进度，已同步。请重新选择要进行的操作。';home();updateStatus();
+  }
+ }catch{notice='暂时无法读取存档，请刷新后再试；已有存档未被覆盖。';updateStatus();}
+}
+async function change(action, expected, after){
+ if(busy)return;busy=true;
+ document.querySelectorAll('main button, #confirm-reset').forEach(b=>b.disabled=true);
+ try{
+  const next=await store.apply(action,expected);accept(next);
+  notice=next.reason?({reset:'另一页面已重新开始，本次旧操作未保存。',conflict:'另一页面更新了进度，请检查后重试。',already:'这份委托已在另一页面归档，保留先前选择。',invalid:'操作未保存，请重新检查线索。'}[next.reason]):'';
+  if(next.reason){unlocked=false;home();}else after();
+ }catch{notice='保存未成功，已有存档未被覆盖。请刷新或稍后再试。';home();}
+ finally{busy=false;document.querySelector('#confirm-reset').disabled=false;updateStatus();void sync();}
+}
 function view(html){main.innerHTML=html;main.focus({preventScroll:true});window.scrollTo({top:0,behavior:'instant'});}
 function home(){
  const n=completed(state);
@@ -15,10 +39,10 @@ function home(){
  document.querySelectorAll('[data-job]').forEach(b=>b.onclick=()=>jobView(b.dataset.job));
  document.querySelector('#final').onclick=()=>state.ending?endingView():finalRoom();
 }
-function jobView(id){const j=jobs.find(j=>j.id===id),choice=state.solved[id];
+function jobView(id){const expected=snapshot;const j=jobs.find(j=>j.id===id),choice=state.solved[id];
  view(`<button class="back" id="back">← 返回事务所</button><article class="story"><div class="eyebrow">委托 ${j.number} / ${j.place}</div><div class="story-icon">${j.icon}</div><h1>${j.title}</h1><p class="narrative">${j.intro}</p><div class="clue"><small>现场记录 / 线索</small><p>${j.clue}</p></div>${choice?`<div class="outcome"><span class="eyebrow">已归档 · ${j.artifact}</span><p>${j.choices.find(c=>c[0]===choice)[2]}</p><p>你收好了线索「${j.word}」。</p></div>`:`<h2>${j.question}</h2><div class="choices">${j.choices.map(c=>`<button data-choice="${c[0]}">${c[1]} <span>↗</span></button>`).join('')}</div>`}<details><summary>一件可以在现实里做的小事</summary><p>${j.prompt}</p></details>${choice?'<button class="primary" id="continue">带上线索，回事务所 →</button>':''}</article>`);
  document.querySelector('#back').onclick=home;
- document.querySelectorAll('[data-choice]').forEach(b=>b.onclick=()=>{state=solve(state,id,b.dataset.choice);save();jobView(id);});
+ document.querySelectorAll('[data-choice]').forEach(b=>b.onclick=()=>change({type:'solve',id,choice:b.dataset.choice},expected,()=>jobView(id)));
  if(choice)document.querySelector('#continue').onclick=home;
 }
 function finalRoom(){if(completed(state)<3)return home();
@@ -27,9 +51,15 @@ function finalRoom(){if(completed(state)<3)return home();
  document.querySelector('#code-form').onsubmit=e=>{e.preventDefault();if(correctCode(document.querySelector('#code').value)){unlocked=true;showEndingChoices();}else document.querySelector('#code-error').textContent='再看看三件物品上的字。这里没有次数限制。';};
  if(unlocked)showEndingChoices();
 }
-function showEndingChoices(){document.querySelector('#code-form').hidden=true;document.querySelector('#ending-choices').innerHTML=`<h2>你想把明天还成什么样子？</h2><p>你的选择没有对错。${balanced(state)?'你既懂得保留，也懂得放手，第三条路亮起来了。':'第三条路需要在委托里同时尝试“保留”与“放手”。重玩时也许会发现。'}</p><div class="choices"><button data-ending="garden">在时间里种一座花园 ↗</button><button data-ending="sea">让城市向未知出发 ↗</button>${balanced(state)?'<button data-ending="window">给明天留一扇窗 ✦</button>':''}</div>`;document.querySelectorAll('[data-ending]').forEach(b=>b.onclick=()=>{state=finish(state,b.dataset.ending,'留一天');save();endingView();});}
+function showEndingChoices(){const expected=snapshot;document.querySelector('#code-form').hidden=true;document.querySelector('#ending-choices').innerHTML=`<h2>你想把明天还成什么样子？</h2><p>你的选择没有对错。${balanced(state)?'你既懂得保留，也懂得放手，第三条路亮起来了。':'第三条路需要在委托里同时尝试“保留”与“放手”。重玩时也许会发现。'}</p><div class="choices"><button data-ending="garden">在时间里种一座花园 ↗</button><button data-ending="sea">让城市向未知出发 ↗</button>${balanced(state)?'<button data-ending="window">给明天留一扇窗 ✦</button>':''}</div>`;document.querySelectorAll('[data-ending]').forEach(b=>b.onclick=()=>change({type:'finish',ending:b.dataset.ending,code:'留一天'},expected,endingView));}
 function endingView(){const e=endings[state.ending];view(`<article class="story ending"><div class="eyebrow">${e.label}</div><div class="story-icon">✦</div><h1>${e.title}</h1><p class="narrative">${e.text}</p><div class="clue"><small>事务所结案回执</small><p>不必一次解决整个人生。<br>留一天，给还没发生的好事情。</p></div><p>案件 0001 已归档。感谢你替这座城市值了一次夜班。</p><div class="actions"><button class="primary" id="back">回到事务所</button><button id="alternate">试试另一种明天</button></div></article>`);document.querySelector('#back').onclick=home;document.querySelector('#alternate').onclick=()=>{unlocked=true;finalRoom();};}
 document.querySelector('.brand').onclick=e=>{e.preventDefault();home();};
 const dialog=document.querySelector('#reset-dialog');
-document.querySelector('#reset').onclick=()=>dialog.showModal();document.querySelector('#cancel-reset').onclick=()=>dialog.close();document.querySelector('#confirm-reset').onclick=()=>{state=fresh();unlocked=false;save();dialog.close();home();};
-home();updateStatus();
+let resetExpected;
+document.querySelector('#reset').onclick=()=>{if(busy)return;resetExpected=snapshot;dialog.showModal();};
+document.querySelector('#cancel-reset').onclick=()=>dialog.close();
+document.querySelector('#confirm-reset').onclick=()=>{dialog.close();change({type:'reset'},resetExpected,()=>{unlocked=false;home();});};
+window.addEventListener('focus',()=>sync());
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)sync();});
+view('<p role="status">正在读取本机进度…</p>');
+accept(await store.init());home();updateStatus();

@@ -1,11 +1,11 @@
 {
   "name": "anomalous-everyday",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node --test",
-    "check": "node --check app.js && node --check engine.js",
+    "test": "node --test tests/*.test.js",
+    "check": "node --check app.js && node --check engine.js && node --check storage.js",
     "start": "python3 -m http.server 8000",
     "build": "node build.js"
   },
