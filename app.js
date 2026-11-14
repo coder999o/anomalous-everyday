@@ -32,10 +32,10 @@ async function change(action, expected, after){
 function view(html){main.innerHTML=html;main.focus({preventScroll:true});window.scrollTo({top:0,behavior:'instant'});}
 function home(){
  const n=completed(state);
- view(`<section class="hero"><div><div class="eyebrow">CASE NO. 0001 / 城市级异常</div><h1>明天，<br>暂时不见了<span>。</span></h1><p class="lede">有人把全城的明天洗缩水了。<br>今晚，你是唯一没有下班的调查员。</p><div class="hero-actions"><button class="primary" id="start">${n===3?'打开最终档案':'接手'+(n?'下一份':'第一份')+'委托'} <span>↗</span></button><span class="muted">约 10 分钟 · 没有失败结局</span></div></div><div class="illustration" aria-hidden="true"><div class="orbit orbit-a"></div><div class="orbit orbit-b"></div><div class="moon"></div><div class="ticket"><small>异常物品 / 请轻拿轻放</small><b>一份未使用的<br>明天</b><span>有效期：直到你准备好</span><div class="barcode"></div></div><div class="stamp">暂存<br>人间</div><span class="star s1">✦</span><span class="star s2">✧</span><span class="caption">图 01. 从洗衣机里打捞出的时间</span></div></section>
+ view(`<section class="hero"><div><div class="eyebrow">CASE NO. 0001 / 城市级异常</div><h1>明天，<br>暂时不见了<span>。</span></h1><p class="lede">有人把全城的明天洗缩水了。<br>今晚，你是唯一没有下班的调查员。</p><div class="hero-actions"><button class="primary" id="start">${state.ending?'重读你的结局':n===3?'打开最终档案':'接手'+(n?'下一份':'第一份')+'委托'} <span>↗</span></button><span class="muted">约 10 分钟 · 没有失败结局</span></div></div><div class="illustration" aria-hidden="true"><div class="orbit orbit-a"></div><div class="orbit orbit-b"></div><div class="moon"></div><div class="ticket"><small>异常物品 / 请轻拿轻放</small><b>一份未使用的<br>明天</b><span>有效期：直到你准备好</span><div class="barcode"></div></div><div class="stamp">暂存<br>人间</div><span class="star s1">✦</span><span class="star s2">✧</span><span class="caption">图 01. 从洗衣机里打捞出的时间</span></div></section>
  <section class="desk"><div class="section-head"><div><div class="eyebrow">YOUR NIGHT SHIFT</div><h2>今晚的委托</h2></div><span class="count">${n} / 3 已归档</span></div><div class="job-grid">${jobs.map(j=>`<button class="job ${state.solved[j.id]?'done':''}" data-job="${j.id}"><span class="job-top"><span>${j.tag}</span><span>${state.solved[j.id]?'已归档 ✓':j.time}</span></span><span class="job-icon">${j.icon}</span><small>委托 ${j.number}</small><h3>${j.title}</h3><span class="job-bottom">${j.place}<b>↗</b></span></button>`).join('')}</div></section>
  <section class="archive"><div><div class="eyebrow">EVIDENCE LOCKER</div><h2>口袋里的不可能</h2><p>${n?'已收集的线索不会消失。按委托编号排列，也许它们在说什么。':'每完成一份委托，就带回一件异常物品。'}</p></div><div class="evidence">${jobs.map(j=>`<div class="evidence-item ${state.solved[j.id]?'found':''}"><span>${state.solved[j.id]?j.word:'?'}</span><small>${state.solved[j.id]?j.artifact:'待发现 · '+j.number}</small></div>`).join('')}</div><button class="${n===3?'primary':''}" id="final" ${n<3?'disabled':''}>${state.ending?'重读你的结局':n===3?'明天的仓库已开启 ↗':'收集全部线索后解锁'}</button></section>`);
- document.querySelector('#start').onclick=()=>n===3?finalRoom():jobView(jobs.find(j=>!state.solved[j.id]).id);
+ document.querySelector('#start').onclick=()=>state.ending?endingView():n===3?finalRoom():jobView(jobs.find(j=>!state.solved[j.id]).id);
  document.querySelectorAll('[data-job]').forEach(b=>b.onclick=()=>jobView(b.dataset.job));
  document.querySelector('#final').onclick=()=>state.ending?endingView():finalRoom();
 }
@@ -63,3 +63,4 @@ window.addEventListener('focus',()=>sync());
 document.addEventListener('visibilitychange',()=>{if(!document.hidden)sync();});
 view('<p role="status">正在读取本机进度…</p>');
 accept(await store.init());home();updateStatus();
+
