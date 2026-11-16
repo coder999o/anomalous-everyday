@@ -17,6 +17,6 @@
 - 依赖安装禁用 npm lifecycle scripts；浏览器由已锁定 Playwright 的官方安装程序安装。
 - 不设置分支保护，也不改变 Pages 配置；此测试流程本身不会部署。
 
-本地基础验证：npm test && npm run check && npm run build。
+本地修改试玩版源文件后，先运行 `npm run build && npm test && npm run check`，并提交更新后的 `dist/`。CI 仍会先测试检出的文件，避免构建掩盖未同步的预览副本。
 交互式浏览器验证：用受支持的预览打开 tests/browser.html。
 ci/browser.mjs 是 GitHub-hosted CI 驱动，不用于连接已有浏览器或真实账户。

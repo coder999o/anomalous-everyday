@@ -45,7 +45,7 @@ npm run check
 - `dist/`：静态预览副本，用 `npm run build` 更新。GitHub Pages 根目录部署不依赖它。
 - `.openai/hosting.json`：仅本地预览配置，无已注册站点身份。
 
-改变逻辑后运行 `npm test && npm run check && npm run build`，再按 QA.md 手测。故事数据由维护者直接写入代码；目前不支持玩家投稿或不可信 HTML 内容。增加新案例应升级存档格式并增加迁移，不应直接覆盖用户已有进度。
+修改试玩版源文件后运行 `npm run build && npm test && npm run check`，提交同步生成的 `dist/` 文件，再按 QA.md 手测。故事数据由维护者直接写入代码；目前不支持玩家投稿或不可信 HTML 内容。增加新案例应升级存档格式并增加迁移，不应直接覆盖用户已有进度。
 
 ### 隐私与已知边界
 
