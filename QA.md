@@ -1,5 +1,13 @@
 # 验证记录
 
+## 现在如何复测
+
+1. **代码与构建**：在仓库根目录用 Node.js 20+ 运行 `npm run build && npm test && npm run check`。先构建再测，避免把未更新的本地预览当成代码故障。提交前确认 `dist/` 只包含预期的生成差异；只改文档时无需提交构建产物。
+2. **真实浏览器存档**：运行 `python3 -m http.server 8000`，打开 [本地浏览器测试页](http://localhost:8000/tests/browser.html)，点击「运行隔离测试」，等待 `ALL PASS (8 browser transaction tests)`。它使用随机测试数据库，不读玩家存档。Node 测试通过不等于 IndexedDB 浏览器回归通过；没看到完整结果就不要记为通过。
+3. **页面与发布**：到 [Actions](https://github.com/coder999o/anomalous-everyday/actions) 确认同一提交的回归测试与 Pages 部署分别成功，再打开 [试玩站](https://coder999o.github.io/anomalous-everyday/) 确认首页能打开。需要验证保存和重置时，使用本地服务及独立浏览器配置，避免覆盖已有进度。
+
+以下是历史验证记录，不代表当前版本的测试数量或覆盖范围。
+
 2026-11-12，本地 Node.js 24 与云端 Chromium。
 
 ## 自动检查：通过
