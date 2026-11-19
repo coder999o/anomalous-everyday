@@ -6,6 +6,10 @@
 
 ## 开始
 
+[打开网页版，直接试玩](https://coder999o.github.io/anomalous-everyday/)。无需安装或登录，进度仅保存在当前浏览器。
+
+### 本地运行与测试
+
 需要 Python 3（运行静态服务）；测试需要 Node.js 20+。无需 `npm install`。
 
 ```sh
